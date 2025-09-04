@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumen Advisor - Asesor de Tesis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @keyframes pulse-glow {
+            0%, 100% { filter: drop-shadow(0 0 3px #06b6d4); }
+            50% { filter: drop-shadow(0 0 8px #67e8f9); }
+        }
+        .pulsing-icon {
+            animation: pulse-glow 2.5s infinite ease-in-out;
+        }
+        .modal-enter { animation: fadeIn 0.3s ease-out; }
+        .modal-leave { animation: fadeOut 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes fadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.95); } }
+        
+        .feedback-content p {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+        .feedback-content ul {
+            margin-bottom: 0.75rem;
+            padding-left: 1.25rem;
+        }
+        .feedback-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        @keyframes core-pulse {
+            0%, 100% { transform: scale(0.95); box-shadow: 0 0 15px 5px rgba(56, 189, 248, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px 10px rgba(56, 189, 248, 0.6); }
+        }
+        .quantum-core {
+            animation: core-pulse 2s infinite ease-in-out;
+        }
+        @keyframes scan-out-left {
+            0% { transform: translateX(0); opacity: 0.8; }
+            100% { transform: translateX(-100%); opacity: 0; }
+        }
+        .scanner-beam-left {
+            animation: scan-out-left 2s ease-out infinite;
+        }
+        @keyframes scan-out-right {
+            0% { transform: translateX(0); opacity: 0.8; }
+            100% { transform: translateX(100%); opacity: 0; }
+        }
+        .scanner-beam-right {
+            animation: scan-out-right 2s ease-out infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-950 font-sans text-gray-200">
+    <div id="app"></div>
+    
+    <!-- Modals -->
+    <div id="rejection-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-gray-900 border border-red-500/50 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
+                <h3 class="text-lg font-bold text-red-400 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    Alerta del Mentor IA
+                </h3>
+                <button onclick="toggleModal('rejection-modal', false)" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <p class="font-semibold text-gray-300">Tus respuestas no cumplen con los criterios de calidad para generar un borrador.</p>
+                <div>
+                    <strong class="text-red-400 text-sm">Razón del rechazo:</strong>
+                    <p id="rejection-reason" class="text-gray-400 text-sm mt-1 p-3 bg-gray-800 rounded-md"></p>
+                </div>
+                <div>
+                    <strong class="text-cyan-400 text-sm">¿Cómo solucionarlo?</strong>
+                    <div id="rejection-guidance" class="text-gray-400 text-sm mt-1 p-3 bg-gray-800 rounded-md space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="guide-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-lg font-bold text-cyan-400">Guía: ¿Cómo delimitar tu tema de proyecto?</h3>
+                <button onclick="toggleModal('guide-modal', false)" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 text-gray-300 text-sm">
+                 <p>Para llevar a cabo tu proyecto, debes plantear un problema con el propósito de proponer una solución. El planteamiento del problema responde a la pregunta fundamental <strong class="text-cyan-300">“¿qué investigar?”</strong> y, por lo tanto, determina, orienta y justifica el desarrollo del proceso.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="coherence-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-lg font-bold text-cyan-400">Análisis de Coherencia Global</h3>
+                <button onclick="toggleModal('coherence-modal', false)" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 text-gray-300 text-sm">
+                <p class="text-xs text-gray-400 mb-4">Ingresa los pilares de tu proyecto para que la IA analice si están alineados estratégicamente.</p>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-gray-400 font-medium mb-1 text-sm">Problema (Pregunta de Investigación)</label>
+                        <textarea id="coherence-problem" class="w-full h-20 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs" placeholder="Ej: ¿Cuál es la infraestructura necesaria para...?"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 font-medium mb-1 text-sm">Objetivo General</label>
+                        <textarea id="coherence-general-obj" class="w-full h-20 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs" placeholder="Ej: Identificar la infraestructura necesaria para..."></textarea>
+                    </div>
+                     <div>
+                        <label class="block text-gray-400 font-medium mb-1 text-sm">Objetivos Específicos (uno por línea)</label>
+                        <textarea id="coherence-specific-objs" class="w-full h-24 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs" placeholder="Ej: Describir el funcionamiento de..."></textarea>
+                    </div>
+                </div>
+                <button id="coherence-button" onclick="handleGetGlobalCoherenceFeedback()" class="w-full mt-4 py-2 px-4 flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 rounded-full shadow-lg">
+                    Realizar Análisis de Alineación
+                </button>
+                <div id="coherence-feedback-panel" class="mt-4 border-t border-gray-700 pt-4 feedback-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="research-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-lg font-bold text-cyan-400">Asistente de Investigación</h3>
+                <button onclick="toggleModal('research-modal', false)" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="research-content" class="p-6 overflow-y-auto text-gray-300 text-sm feedback-content"></div>
+        </div>
+    </div>
+
+    <div id="defense-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-lg font-bold text-cyan-400">Simulador de Defensa Oral</h3>
+                <button onclick="toggleModal('defense-modal', false)" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="defense-content" class="p-6 overflow-y-auto text-gray-300 text-sm space-y-4 feedback-content"></div>
+        </div>
+    </div>
+
+     <div id="legal-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden modal-enter">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 id="legal-modal-title" class="text-lg font-bold text-cyan-400"></h3>
+                <button onclick="toggleModal('legal-modal', false)" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="legal-modal-content" class="p-6 overflow-y-auto space-y-4 text-gray-300 text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+        // Estado de la aplicación
+        let appState = {
+            inputText: '',
+            generalObjectiveText: '',
+            problemStatementText: '', 
+            section: 'Introducción',
+            feedback: null,
+            loading: false,
+            loadingMessage: 'INICIANDO ANÁLISIS...',
+            loadingInterval: null,
+            message: '',
+            messageType: 'info',
+            feedbackHistory: [],
+            sectionSpecificHelperText: '',
+            currentAction: null,
+            currentDefenseQuestion: '',
+            uploadedImageBase64: null,
+            isBuilderActive: false,
+            builderAnswers: {},
+            specificObjectives: [{ verb: '', object: '', purpose: '' }]
+        };
+
+        // Lista de secciones de tesis
+        const sections = [
+            'Introducción',
+            'Planteamiento del problema',
+            'Justificación',
+            'Objetivo General',
+            'Objetivos Específicos',
+            'Marco Teórico',
+            'Desarrollo',
+            'Metodología',
+            'Conclusiones',
+        ];
+        
+        // Descripciones para cada sección
+        const sectionDescriptions = {
+            'Introducción': 'Presenta el tema, problema, objetivos y estructura del informe.',
+            'Planteamiento del problema': 'Describe la situación a resolver, yendo de lo general a lo particular y formulando una pregunta de investigación.',
+            'Justificación': 'Explica la importancia y relevancia del proyecto (práctica, social, teórica).',
+            'Objetivo General': 'Define la meta principal y global del proyecto en una sola oración.',
+            'Objetivos Específicos': 'Detalla los pasos concretos y medibles para alcanzar el objetivo general.',
+            'Marco Teórico': 'Expone los antecedentes, teorías y conceptos que sustentan la investigación.',
+            'Desarrollo': 'Es el cuerpo del informe. Expone la información principal, análisis, resultados y hallazgos del proyecto.',
+            'Metodología': 'Describe el método y las técnicas utilizadas para cumplir los objetivos.',
+            'Conclusiones': 'Sintetiza los hallazgos, evalúa el cumplimiento de objetivos y propone futuras líneas de investigación.',
+        };
+
+        const guidedBuilderQuestions = {
+            'Justificación': [
+                { id: 'q1', question: '¿Quiénes se benefician directamente si tu proyecto tiene éxito? (Ej: Los agricultores, los estudiantes, etc.)' },
+                { id: 'q2', question: '¿Qué problema social, económico o práctico más grande ayuda a resolver? (Ej: La escasez hídrica, la deserción escolar, etc.)' },
+                { id: 'q3', question: '¿Por qué es importante resolver este problema AHORA?' }
+            ],
+            'Planteamiento del problema': [
+                { id: 'q1', question: 'Describe la situación general o el contexto donde ocurre el problema.' },
+                { id: 'q2', question: '¿Cuáles son los síntomas o hechos observables de esta situación no deseada?' },
+                { id: 'q3', question: 'Finalmente, formula la pregunta central que tu proyecto busca responder. (Ej: ¿De qué manera...?, ¿Cuál es el impacto...?)' }
+            ],
+            'Objetivo General': [
+                 { id: 'verb', question: '¿Qué acción principal buscas lograr? Comienza con un verbo en infinitivo que indique una acción amplia (ej: Analizar, Diseñar, Evaluar, Proponer).' },
+                 { id: 'object', question: '¿Sobre qué cosa u objeto recae esa acción? (ej: un sistema de riego, un plan de marketing, la infraestructura necesaria).' },
+                 { id: 'purpose', question: 'Finalmente, ¿para qué quieres hacer esto? ¿Cuál es el propósito o beneficio final? (ej: para optimizar el uso del agua, para incrementar las ventas, para evaluar la factibilidad del cambio).' }
+            ],
+            'Objetivos Específicos': [
+                { id: 'verb', question: 'Piensa en un paso concreto para lograr tu objetivo general. ¿Qué acción medible necesitas realizar? Usa un verbo en infinitivo (ej: Describir, Determinar, Identificar).' },
+                { id: 'object', question: '¿Sobre qué elemento recae esa acción específica? (ej: el funcionamiento de los vehículos, la cantidad de estaciones, el stock mínimo).' },
+                { id: 'purpose', question: '¿Para qué necesitas dar este paso? ¿Qué te permitirá lograr o conocer? (ej: para identificar los componentes, para garantizar la provisión de energía, para asegurar la operatividad).' }
+            ]
+        };
+
+        // Límites de caracteres
+        const charLimits = {
+            'Introducción': 3000,
+            'Planteamiento del problema': 3500,
+            'Justificación': 3000,
+            'Objetivo General': 500,
+            'Objetivos Específicos': 1000,
+            'Marco Teórico': 6000,
+            'Desarrollo': 8000,
+            'Metodología': 3500,
+            'Conclusiones': 3000,
+            'problemContext': 2500,
+            'generalObjectiveContext': 500
+        };
+
+        // Funciones para modales
+        function toggleModal(modalId, show) {
+            const modal = document.getElementById(modalId);
+            if (show) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+        
+        function showRejectionModal(reason, guidance) {
+            document.getElementById('rejection-reason').innerText = reason;
+            document.getElementById('rejection-guidance').innerHTML = guidance.replace(/\n/g, '<br>');
+            toggleModal('rejection-modal', true);
+        }
+
+        function toggleGuideModal(show) { toggleModal('guide-modal', show); }
+        function toggleCoherenceModal(show) {
+             if (show) {
+                document.getElementById('coherence-problem').value = appState.problemStatementText;
+                document.getElementById('coherence-general-obj').value = appState.generalObjectiveText;
+            }
+            toggleModal('coherence-modal', show);
+        }
+        function toggleLegalModal(show, title = '', content = '') {
+            if (show) {
+                document.getElementById('legal-modal-title').innerText = title;
+                document.getElementById('legal-modal-content').innerHTML = content;
+            }
+            toggleModal('legal-modal', show);
+        }
+
+        function toggleResearchModal(show) {
+            const modal = document.getElementById('research-modal');
+            const content = document.getElementById('research-content');
+            const problem = appState.problemStatementText;
+            const generalObj = appState.generalObjectiveText;
+
+            if (show) {
+                if (!problem || !generalObj) {
+                    content.innerHTML = `
+                        <div class="text-center p-4">
+                            <h4 class="font-semibold text-white mb-2">⚠️ Para usar esta herramienta, primero necesito entender tu proyecto.</h4>
+                            <p class="text-xs text-gray-400">Por favor, define tu <strong>Planteamiento del Problema</strong> y tu <strong>Objetivo General</strong> en sus respectivas secciones o en el módulo de <strong class="text-cyan-400">"Coherencia Global"</strong> 🧠.</p>
+                        </div>`;
+                } else {
+                     content.innerHTML = `
+                        <h4 class="font-semibold text-white mb-2">Analizador de Relevancia de Fuentes</h4>
+                        <p class="text-xs text-gray-400 mb-2">Pega el resumen (abstract) de un artículo para que la IA evalúe su relevancia para tu proyecto y te sugiera una estrategia de lectura.</p>
+                        <textarea id="research-abstract" class="w-full h-32 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs" placeholder="Pega aquí el resumen del artículo..."></textarea>
+                        <button id="research-button" onclick="handleGetRelevanceFeedback()" class="w-full mt-2 py-2 px-4 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-full">Analizar Relevancia</button>
+                        <div id="research-feedback-panel" class="mt-4 border-t border-gray-700 pt-4"></div>`;
+                }
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function toggleDefenseModal(show) {
+            const modal = document.getElementById('defense-modal');
+            const content = document.getElementById('defense-content');
+            const problem = appState.problemStatementText;
+            const generalObj = appState.generalObjectiveText;
+
+            if (show) {
+                 if (!problem || !generalObj) {
+                    content.innerHTML = `
+                        <div class="text-center p-4">
+                            <h4 class="font-semibold text-white mb-2">⚠️ Para usar esta herramienta, primero necesito entender tu proyecto.</h4>
+                           <p class="text-xs text-gray-400">Por favor, define tu <strong>Planteamiento del Problema</strong> y tu <strong>Objetivo General</strong> en sus respectivas secciones o en el módulo de <strong class="text-cyan-400">"Coherencia Global"</strong> 🧠.</p>
+                        </div>`;
+                } else {
+                    content.innerHTML = `
+                        <div id="defense-question-panel" class="p-4 bg-gray-950/50 border border-gray-800 rounded-lg">
+                            <p class="text-center">Haz clic en "Generar Pregunta" para comenzar la simulación.</p>
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 font-medium mb-1 text-sm">Tu Respuesta</label>
+                            <textarea id="defense-answer" class="w-full h-28 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs" placeholder="Escribe aquí tu respuesta como si estuvieras en tu defensa..."></textarea>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="defense-question-button" onclick="handleGetDefenseQuestion()" class="w-1/2 py-2 px-4 text-sm font-bold text-white bg-fuchsia-600 hover:bg-fuchsia-700 rounded-full">Generar Nueva Pregunta</button>
+                            <button id="defense-answer-button" onclick="handleEvaluateDefenseAnswer()" class="w-1/2 py-2 px-4 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-full">Evaluar mi Respuesta</button>
+                        </div>
+                        <div id="defense-feedback-panel" class="mt-4 border-t border-gray-700 pt-4"></div>`;
+                }
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function showLegalInfo(type) {
+            const legalContent = {
+                terms: {
+                    title: 'Términos de Servicio',
+                    content: '<p>Bienvenido a Lumen Advisor. Al utilizar esta aplicación, usted acepta estar sujeto a estos términos de servicio. El servicio se proporciona "tal cual" y sin garantías de ningún tipo. El contenido generado por la IA es solo para fines de orientación y debe ser revisado críticamente.</p>'
+                },
+                policy: {
+                    title: 'Política de Privacidad',
+                    content: '<p>Nos tomamos su privacidad en serio. No almacenamos permanentemente ningún texto o imagen que usted cargue. Toda la información se procesa en tiempo real y se descarta después de generar la retroalimentación. No compartimos sus datos con terceros.</p>'
+                },
+                ai: {
+                    title: 'Sobre la Inteligencia Artificial',
+                    content: '<p>Lumen Advisor utiliza modelos de lenguaje avanzados para potenciar sus capacidades de análisis y retroalimentación. La IA está entrenada para actuar como un asesor académico, pero sus sugerencias no reemplazan la guía de un tutor humano. Utilice esta herramienta como un complemento para mejorar su escritura y pensamiento crítico.</p>'
+                }
+            };
+            const { title, content } = legalContent[type];
+            toggleLegalModal(true, title, content);
+        }
+
+        function showMessage(msg, type = 'info', duration = 5000) {
+            appState.message = msg;
+            appState.messageType = type;
+            render();
+            setTimeout(() => {
+                if (appState.message === msg) {
+                    appState.message = '';
+                    render();
+                }
+            }, duration);
+        }
+
+        function parseFeedback(text) {
+            if (!text) return '';
+            const icons = {
+                SALUDO: `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>`,
+                "PUNTO DE ENFOQUE PRINCIPAL": `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>`,
+                "EVALUACIÓN GENERAL": `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>`,
+                "ANÁLISIS DETALLADO": `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>`,
+                "BANCO DE RECURSOS": `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>`,
+                "PREGUNTAS DEL EVALUADOR": `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`,
+                CIERRE: `<svg class="h-5 w-5 mr-3 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>`,
+            };
+            
+            const blockRegex = /\[(SALUDO|PUNTO DE ENFOQUE PRINCIPAL|EVALUACIÓN GENERAL|ANÁLISIS DETALLADO|BANCO DE RECURSOS|PREGUNTAS DEL EVALUADOR|CIERRE|ANÁLISIS DE ALINEACIÓN VERTICAL|ANÁLISIS DE SUFICIENCIA DE PASOS|ANÁLISIS DE CONSISTENCIA TERMINOLÓGICA|DIAGNÓSTICO GENERAL Y RECOMENDACIÓN):?(.*?)\]([\s\S]*?)\[\/\1\]/g;
+            
+            let processedText = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-white">$1</strong>')
+                .replace(/\[\[\s*rojo\s*\]\](.*?)\[\[\s*\/\s*rojo\s*\]\]/g, '<span class="font-semibold text-red-400">$1</span>')
+                .replace(/\[\[\s*azul\s*\]\](.*?)\[\[\s*\/\s*azul\s*\]\]/g, '<span class="font-semibold text-cyan-300">$1</span>');
+
+            return processedText.replace(blockRegex, (match, tag, title, content) => {
+                const paragraphs = content.trim().split('\n\n').map(p => {
+                    const lines = p.split('\n').map(line => {
+                        if (line.trim().startsWith('- ')) {
+                            return `<li class="ml-4">${line.trim().substring(2)}</li>`;
+                        }
+                        return line;
+                    }).join('<br>');
+
+                    if (lines.includes('<li>')) {
+                        return `<ul class="list-disc list-outside space-y-2">${lines.replace(/<br>/g, '')}</ul>`;
+                    }
+                    return `<p>${lines}</p>`;
+                });
+
+                const contentHtml = paragraphs.join('');
+                const sectionTitle = title || (tag.charAt(0) + tag.slice(1).toLowerCase());
+                
+                return `
+                    <div class="p-4 mb-3 bg-gray-950/50 border border-gray-800 rounded-lg shadow-lg">
+                        <div class="flex items-center mb-2">
+                            ${icons[tag] || ''}
+                            <h3 class="font-bold text-gray-300">${sectionTitle}</h3>
+                        </div>
+                        <div class="text-gray-400 pl-8 space-y-4">
+                            ${contentHtml}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return response;
+                    if (response.status >= 400 && response.status < 500) {
+                        const errorBody = await response.json();
+                        console.error("Error de cliente:", errorBody);
+                        throw new Error(`Error de la API: ${errorBody.error?.message || response.statusText}`);
+                    }
+                    console.warn(`Intento ${i + 1} fallido con estado ${response.status}. Reintentando...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2; 
+                } catch (error) {
+                    console.error(`Error en el intento ${i + 1}:`, error);
+                    if (i === retries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+            throw new Error('No se pudo conectar después de varios intentos.');
+        }
+
+        function getSectionCriteria(sectionName) {
+            switch (sectionName) {
+                case 'Introducción': return `-   **Contextualización:** ¿Se presenta el tema en un entorno particular para que el lector se sitúe?\n-   **Justificación de Relevancia:** ¿Se explica por qué es importante abordar el tema?\n-   **Planteamiento del Problema:** ¿Se establece la problemática que se busca resolver? ¿Se formula como pregunta?\n-   **Objetivos (General y Específicos):** ¿Se enuncian claramente los propósitos del proyecto?\n-   **Metodología:** ¿Se describe brevemente cómo se realizó la investigación o el proyecto?\n-   **Resumen de Secciones:** ¿Se presenta un mapa de las partes que componen el informe?`;
+                case 'Planteamiento del problema': return `-   **Descripción del Problema:** ¿Se describe la situación no deseada que se quiere cambiar? ¿Se va de lo general a lo particular?\n-   **Contexto:** ¿Se presenta información y datos relevantes que permitan entender la magnitud del problema?\n-   **Formulación del Problema:** ¿Se concluye con una pregunta clara y precisa que resuma lo que se quiere investigar? (Ej: ¿Cuál es la infraestructura necesaria para...?)`;
+                case 'Justificación': return `-   **Relevancia Práctica:** ¿Cómo ayudará este proyecto a resolver un problema concreto en un contexto real? ¿Quiénes se benefician?\n-   **Relevancia Social:** ¿Cuál es el alcance o impacto social de la investigación? ¿Aporta a la comunidad o a la sociedad?\n-   **Relevancia Teórica:** ¿El proyecto llena algún vacío en el conocimiento existente? ¿Puede aportar a la teoría?\n-   **Relevancia Metodológica:** ¿Tu trabajo propone un nuevo método o instrumento para investigar que pueda ser usado por otros?`;
+                case 'Objetivo General': return `-   **Estructura Correcta:** ¿El objetivo sigue la fórmula: **Verbo en Infinitivo + Objeto (¿Qué?) + Finalidad (¿Para qué?)**?\n-   **Claridad y Precisión:** ¿Es una declaración única, clara y concisa de lo que el proyecto busca lograr a nivel global?\n-   **Verbo Adecuado:** ¿Comienza con un verbo en infinitivo que indica una acción amplia (ej. Analizar, Diseñar, Evaluar, Proponer)?\n-   **Respuesta al Problema:** ¿El objetivo general responde directamente a la pregunta formulada en el planteamiento del problema?`;
+                case 'Objetivos Específicos': return `-   **Estructura Correcta:** ¿Cada objetivo sigue la fórmula: **Verbo en Infinitivo + Objeto (¿Qué?) + Finalidad (¿Para qué?)**?\n-   **Desglose del Objetivo General:** ¿Son los pasos lógicos y necesarios para alcanzar el objetivo general? ¿La suma de ellos da como resultado el objetivo general?\n-   **Medibles y Alcanzables:** ¿Cada objetivo es concreto y se puede verificar su cumplimiento al final del proyecto?\n-   **Verbos Adecuados:** ¿Comienzan con verbos en infinitivo que denotan acciones concretas (ej. Describir, Determinar, Identificar, Evaluar)?`;
+                case 'Marco Teórico': return `-   **Antecedentes:** ¿Se exponen estudios previos y relevantes sobre el tema (estado del arte)?\n-   **Bases Teóricas:** ¿Se presentan las teorías, modelos y conceptos clave que sustentan la investigación? ¿Se citan autores importantes?\n-   **Diferenciación de un Glosario:** ¿El texto va más allá de definir términos y los relaciona, creando un soporte conceptual para el problema?\n-   **Coherencia:** ¿El marco teórico está directamente relacionado con el problema y los objetivos planteados?`;
+                case 'Desarrollo': return `-   **Eje Central:** ¿Es la parte con mayor contenido del informe? ¿Expone la información principal del proyecto?\n-   **Estructura Lógica:** ¿Está dividido en capítulos o secciones ordenadas que abordan aspectos específicos?\n-   **Respuesta al Problema:** ¿Se da respuesta al problema planteado, utilizando el marco teórico como base?\n-   **Cumplimiento de Objetivos:** ¿Las acciones descritas contribuyen a cumplir los objetivos específicos?\n-   **Inclusión de Elementos:** ¿Se incluyen elementos como etapas, cronogramas, recursos, análisis de datos y resultados?`;
+                case 'Metodología': return `-   **Diseño y Enfoque:** ¿Se describe el tipo de estudio (ej. experimental, descriptivo) y el enfoque (cuantitativo, cualitativo o mixto)?\n-   **Técnicas de Recolección:** ¿Se detallan las técnicas o estrategias usadas para recabar la información (búsqueda bibliográfica, entrevistas, encuestas)?\n-   **Población y Muestra (si aplica):** ¿Se definen los sujetos de estudio y cómo se seleccionaron?\n-   **Análisis de Datos:** ¿Se explica cómo se procesaron y analizaron los datos recopilados para cumplir los objetivos?`;
+                case 'Conclusiones': return `-   **Síntesis del Desarrollo:** ¿Se resumen los puntos más relevantes del tema investigado?\n-   **Evaluación de Objetivos:** ¿Se retoman los objetivos (general y específicos) y se especifica su nivel de cumplimiento?\n-   **Proyecciones:** ¿Se proponen nuevos desafíos, temas o áreas para futuras investigaciones?\n-   **Coherencia:** ¿La conclusión cierra de forma coherente el informe, sin añadir información nueva?`;
+                default: return `-   **Claridad y Precisión:** ¿Las ideas presentadas son claras y están bien definidas?\n-   **Coherencia:** ¿El contenido de esta sección es coherente con el problema y los objetivos de tu proyecto?\n-   **Profundidad:** ¿El análisis es suficientemente profundo o se queda en un nivel superficial?\n-   **Estructura Lógica:** ¿La sección está bien organizada y sigue un hilo conductor claro?`;
+            }
+        }
+
+        async function getAIFeedback(prompt, imageBase64 = null) {
+            let parts = [{ text: prompt }];
+            if (imageBase64) {
+                parts.push({
+                    inlineData: {
+                        mimeType: "image/jpeg",
+                        data: imageBase64
+                    }
+                });
+            }
+
+             const payload = {
+                contents: [{ parts: parts }],
+                generationConfig: {
+                    temperature: 0.7,
+                    topK: 40,
+                    topP: 0.95,
+                    maxOutputTokens: 8192,
+                },
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+                ]
+            };
+
+            try {
+                const apiKey = "AIzaSyA4ZzGnBlgeaKSnq2_ED_RkMNR5V47J-lM";
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const options = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                };
+
+                const response = await fetchWithRetry(url, options);
+                
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    if (result.error) {
+                        console.error("API Error:", result.error);
+                        throw new Error(`Error de la API: ${result.error.message}`);
+                    }
+                    console.error("Respuesta inválida de la API o contenido bloqueado:", result);
+                    throw new Error('Respuesta inválida de la API o contenido bloqueado.');
+                }
+            } catch (error) {
+                console.error('Error final al conectar con Gemini:', error);
+                throw error;
+            }
+        }
+
+        function startGuidedBuilder() {
+            appState.isBuilderActive = true;
+            appState.builderAnswers = {};
+            if (appState.section === 'Objetivos Específicos') {
+                appState.specificObjectives = [{ verb: '', object: '', purpose: '' }];
+            }
+            render();
+        }
+        
+        function handleStartOver() {
+            appState.inputText = '';
+            appState.isBuilderActive = false;
+            render();
+        }
+
+        function addSpecificObjective() {
+            if (appState.specificObjectives.length < 4) {
+                appState.specificObjectives.push({ verb: '', object: '', purpose: '' });
+                renderWithFocus();
+            } else {
+                showMessage("Se recomienda un máximo de 4 objetivos específicos.", "info");
+            }
+        }
+
+        async function handleGenerateDraft() {
+            const button = document.getElementById('generate-draft-button');
+            button.disabled = true;
+            
+            clearInterval(appState.loadingInterval);
+            const loadingMessages = [
+                'Validando tus respuestas...',
+                'Analizando coherencia lógica...',
+                'Consultando base de conocimiento...'
+            ];
+            let messageIndex = 0;
+            appState.loadingMessage = loadingMessages[messageIndex];
+            appState.loading = true;
+            render(); 
+
+            appState.loadingInterval = setInterval(() => {
+                messageIndex = (messageIndex + 1) % loadingMessages.length;
+                appState.loadingMessage = loadingMessages[messageIndex];
+                const loadingTextElement = document.getElementById('loading-text');
+                if (loadingTextElement) loadingTextElement.innerText = appState.loadingMessage;
+            }, 1500);
+
+            let answersContext = '';
+            if (appState.section === 'Objetivos Específicos') {
+                appState.specificObjectives.forEach((obj, index) => {
+                    answersContext += `**Objetivo Específico ${index + 1}:**\n- Verbo: ${obj.verb}\n- Objeto: ${obj.object}\n- Finalidad: ${obj.purpose}\n\n`;
+                });
+            } else {
+                const questions = guidedBuilderQuestions[appState.section] || [];
+                questions.forEach(q => {
+                    answersContext += `- Pregunta: "${q.question}"\n- Respuesta: "${appState.builderAnswers[q.id] || ''}"\n\n`;
+                });
+            }
+
+            const validationPrompt = `
+Actúa como un "Metodólogo Evaluador" y "Control de Calidad" académico. Analiza las siguientes respuestas proporcionadas por un estudiante para construir la sección de "${appState.section}".
+Tu única tarea es juzgar si las respuestas son lógicamente coherentes, factibles y significativas en un contexto académico. No juzgues la gramática perfecta, sino la intención, el sentido y la viabilidad.
+
+**Base de Conocimiento (Criterios de Éxito para esta sección):**
+${getSectionCriteria(appState.section)}
+
+**Respuestas del Estudiante:**
+${answersContext}
+
+**Tu Análisis Crítico (considera la base de conocimiento):**
+1.  **Coherencia Lógica:** ¿La acción (verbo) conduce lógicamente al propósito (finalidad)? ¿O hay una contradicción como "proponer" para "cuantificar"?
+2.  **Calidad Académica:** ¿Los términos son apropiados o demasiado vagos/informales (ej. "ver", "ayudar al planeta")?
+3.  **Significado:** ¿Las respuestas son texto con sentido o son letras al azar/texto sin sentido?
+
+**Tu Veredicto (OBLIGATORIO - sigue este formato exacto):**
+- Si las respuestas pasan el control de calidad, responde ÚNICAMENTE con la palabra: APROBADO
+- Si las respuestas fallan, responde así: RECHAZADO: [Razón corta y directa] ||| [Guía detallada y constructiva sobre cómo solucionarlo con ejemplos].
+Ejemplo de rechazo: "RECHAZADO: Existe una incoherencia lógica entre la acción de 'proponer' y la finalidad de 'cuantificar'. ||| Para que tu objetivo sea sólido, la acción y el propósito deben estar conectados. Si tu foco es el DISEÑO, usa un verbo como 'Diseñar' con una finalidad como 'para mejorar la eficiencia'. Si tu foco es la MEDICIÓN, usa un verbo como 'Evaluar' con la finalidad de 'para cuantificar su optimización'."`;
+
+            try {
+                const validationResponse = await getAIFeedback(validationPrompt);
+
+                if (validationResponse.trim().startsWith('APROBADO')) {
+                     const generationLoadingMessages = [
+                        'Respuestas aprobadas',
+                        'Estructurando borrador...',
+                        'Refinando lenguaje académico...',
+                        'Generando versión final...'
+                    ];
+                    let genMsgIndex = 0;
+                    appState.loadingMessage = generationLoadingMessages[genMsgIndex];
+                    clearInterval(appState.loadingInterval);
+                    appState.loadingInterval = setInterval(() => {
+                        genMsgIndex = (genMsgIndex + 1) % generationLoadingMessages.length;
+                        appState.loadingMessage = generationLoadingMessages[genMsgIndex];
+                        const loadingTextElement = document.getElementById('loading-text');
+                        if (loadingTextElement) loadingTextElement.innerText = appState.loadingMessage;
+                    }, 1500);
+
+                    
+                    let generationPrompt;
+                     const expertEditorInstructions = `
+Actúa como un redactor académico experto y mentor. Has recibido los siguientes componentes en bruto de un estudiante para la sección de '${appState.section}'. Estos componentes ya han sido validados por su coherencia básica.
+Tu misión es elevarlos a un estándar de excelencia:
+1.  **Ensamblar** los componentes de forma lógica.
+2.  **Refinar y Elevar el Lenguaje:** Reemplaza términos informales o vagos con un vocabulario académico preciso y profesional.
+3.  **Ajustar la Estructura:** Asegúrate de que la redacción final cumpla perfectamente con los criterios académicos para esta sección.
+4.  **Completar para dar Claridad:** Añade contexto o conectores para que las ideas tengan pleno sentido académico, sin inventar información nueva.
+El resultado debe ser un borrador de alta calidad, listo para que el estudiante lo use como un punto de partida sólido y profesional.
+Al inicio, incluye una frase introductoria natural y colaborativa como "¡Buen trabajo! Basado en tus respuestas, he generado este borrador como punto de partida:"`;
+
+                    if (appState.section === 'Objetivo General') {
+                        generationPrompt = `
+${expertEditorInstructions}
+**Componentes en bruto del estudiante:**
+- Verbo (Acción principal): "${appState.builderAnswers.verb}"
+- Objeto (Sobre qué recae): "${appState.builderAnswers.object}"
+- Finalidad (Para qué): "${appState.builderAnswers.purpose}"
+**Tu Tarea:** Genera la frase introductoria y luego, en una nueva línea, UNA SOLA ORACIÓN que sea el resultado de este proceso de edición experta.
+Por ejemplo, si el estudiante da: "ver", "los autos eléctricos", "para ayudar al planeta", un buen resultado sería:
+"¡Buen trabajo! Basado en tus respuestas, he generado este borrador como punto de partida:
+Analizar el impacto de la transición a vehículos eléctricos con el fin de cuantificar sus beneficios medioambientales en el contexto urbano."`;
+                    } else if (appState.section === 'Objetivos Específicos') {
+                        generationPrompt = `
+${expertEditorInstructions}
+**Componentes en bruto del estudiante:**
+${answersContext}
+**Tu Tarea:** Genera la frase introductoria y luego, en nuevas líneas, una lista formateada con guiones. Cada ítem debe ser un objetivo específico completo, profesional y bien redactado.`;
+                    } else {
+                         generationPrompt = `
+${expertEditorInstructions}
+**Respuestas en bruto del estudiante:**
+${answersContext}
+**Tu Tarea:** Genera un borrador de 1 o 2 párrafos de alta calidad.`;
+                    }
+                    
+                    const draftResponse = await getAIFeedback(generationPrompt);
+                    const draftLines = draftResponse.split('\\n');
+                    const draftText = draftLines.slice(draftLines.findIndex(line => line.trim() !== '') + 1).join('\\n').trim();
+
+                    appState.inputText = draftText;
+                    appState.isBuilderActive = false;
+                    showMessage(draftLines[0], 'success');
+
+                } else {
+                    const parts = validationResponse.replace('RECHAZADO:', '').split('|||');
+                    const reason = parts[0] ? parts[0].trim() : 'Las respuestas no cumplen con los criterios de calidad.';
+                    const guidance = parts[1] ? parts[1].trim() : 'Por favor, revisa tus respuestas para que sean más coherentes y detalladas.';
+                    showRejectionModal(reason, guidance);
+                }
+            } catch (error) {
+                showMessage(`Error durante la validación: ${error.message}`, 'error');
+            } finally {
+                clearInterval(appState.loadingInterval);
+                appState.loading = false;
+                render();
+            }
+        }
+
+        async function handleGetSectionFeedback() {
+            clearInterval(appState.loadingInterval);
+            const loadingMessages = [
+                'Conectando con el asesor IA...',
+                'Analizando estructura...',
+                'Evaluando coherencia lógica...',
+                'Refinando lenguaje académico...',
+                'Construyendo retroalimentación...'
+            ];
+            let messageIndex = 0;
+            appState.loadingMessage = loadingMessages[messageIndex];
+            appState.loading = true;
+            render(); 
+
+            appState.loadingInterval = setInterval(() => {
+                messageIndex = (messageIndex + 1) % loadingMessages.length;
+                appState.loadingMessage = loadingMessages[messageIndex];
+                const loadingTextElement = document.getElementById('loading-text');
+                if (loadingTextElement) loadingTextElement.innerText = appState.loadingMessage;
+            }, 2000);
+            
+            appState.currentAction = 'feedback';
+            appState.feedback = null;
+            
+            let specialistRole = '';
+            let focusedMission = '';
+            let providedContext = '';
+            const sectionCriteriaContent = getSectionCriteria(appState.section);
+
+            const strictRules = `
+**REGLAS DE ENFOQUE ESTRICTO (INQUEBRANTABLE):**
+1. Basa el 100% de tu análisis ÚNICAMENTE en el texto del estudiante y el contexto proporcionado.
+2. Tienes ESTRICTAMENTE PROHIBIDO mencionar, solicitar o hacer referencia a cualquier otra sección del informe que no se te haya entregado explícitamente como contexto. Por ejemplo, si evalúas el Objetivo General, NO menciones los Objetivos Específicos.
+3. Tu 'Punto de Enfoque Principal' debe estar directamente relacionado con la sección actual.`;
+
+            switch(appState.section) {
+                case 'Objetivo General':
+                    specialistRole = "Actúa como un especialista en la formulación de Objetivos Generales.";
+                    focusedMission = "Tu única misión es evaluar si el objetivo proporcionado es una respuesta directa y coherente al Planteamiento del Problema que se te entrega como contexto. Tu análisis debe basarse estricta y únicamente en los siguientes criterios académicos:";
+                    providedContext = `**Contexto Proporcionado (Planteamiento del Problema):**\n"${appState.problemStatementText || 'No proporcionado. Si falta, tu primera observación debe ser la necesidad de definirlo para poder continuar.'}"`;
+                    break;
+                case 'Objetivos Específicos':
+                    specialistRole = "Actúa como un experto en la planificación de proyectos de investigación.";
+                    focusedMission = "Tu única misión es evaluar si la lista de objetivos específicos son los pasos lógicos y suficientes para cumplir con el Objetivo General que se te da como contexto. Tu análisis debe basarse estricta y únicamente en los siguientes criterios académicos:";
+                    providedContext = `**Contexto Proporcionado (Objetivo General):**\n"${appState.generalObjectiveText || 'No proporcionado. Si falta, indícalo como una debilidad crítica.'}"`;
+                    break;
+                default:
+                    specialistRole = `Actúa como un Asesor de Tesis de élite, especialista en la sección de "${appState.section}".`;
+                    focusedMission = "Tu única misión es evaluar la calidad y estructura del texto proporcionado para esta sección, basándote estricta y únicamente en los siguientes criterios académicos:";
+                    providedContext = "";
+                    break;
+            }
+
+            const prompt = `
+${specialistRole}
+
+${focusedMission}
+${sectionCriteriaContent}
+
+${providedContext}
+
+${strictRules}
+
+**Lógica de Respuesta:**
+1.  Si el texto del estudiante es un borrador, usa la **Plantilla de Retroalimentación de Máximo Impacto**.
+2.  Si el texto del estudiante está vacío, usa la **Plantilla de Guía para Comenzar**.
+
+**Instrucciones de Formato (OBLIGATORIO):**
+-   Usa **EXCLUSIVamente** los siguientes bloques: [SALUDO:Análisis del Borrador], [PUNTO DE ENFOQUE PRINCIPAL:Próximo Paso Clave], [EVALUACIÓN GENERAL:Coherencia, Claridad y Ortografía], [ANÁLISIS DETALLADO:Análisis para ${appState.section}], [BANCO DE RECURSOS:Herramientas para la Tarea], [PREGUNTAS DEL EVALUADOR:Prueba de Fuego], [CIERRE:Siguientes Pasos].
+-   Usa **negrita**, [[rojo]]debilidades[[/rojo]], y [[azul]]fortalezas[[/azul]].
+-   **REGLA DE FORMATO CRÍTICA E INQUEBRANTABLE:** NUNCA dejes un tag sin cerrar. NUNCA uses espacios dentro de los corchetes. El formato DEBE SER EXACTAMENTE \`[[rojo]]texto[[/rojo]]\` y \`[[azul]]texto[[/azul]]\`. Cualquier variación romperá la visualización.
+
+---
+**Plantilla 1: Guía para Comenzar**
+[SALUDO:Análisis del Borrador]
+He recibido tu solicitud. Para poder darte una retroalimentación de alto impacto, necesito que escribas un primer borrador. No te preocupes por la perfección, el objetivo es tener un punto de partida.
+[/SALUDO]
+[ANÁLISIS DETALLADO:Criterios de Éxito para ${appState.section}]
+Antes de que empieces, ten claros los pilares que sostienen una sección de **${appState.section}** sólida:
+${sectionCriteriaContent}
+[/ANÁLISIS DETALLADO]
+[CIERRE:Siguientes Pasos]
+Concéntrate en desarrollar estas ideas. Una vez que tengas tu borrador, lo analizaré en detalle para llevarlo al siguiente nivel. Espero tu texto.
+[/CIERRE]
+
+---
+**Plantilla 2: Retroalimentación de Máximo Impacto**
+[SALUDO:Análisis del Borrador]
+He analizado tu borrador. Mi evaluación es directa y está diseñada para que apliques mejoras concretas de inmediato. Tu texto tiene potencial; vamos a pulirlo.
+[/SALUDO]
+[PUNTO DE ENFOQUE PRINCIPAL:Próximo Paso Clave]
+(Identifica el problema MÁS importante que, si se soluciona, mejorará todo el texto. Sé muy específico.)
+- **Diagnóstico Principal:** (Ej: "La debilidad fundamental de tu justificación es que se basa en [[rojo]]opiniones personales en lugar de argumentos con evidencia[[/rojo]].")
+- **Misión Prioritaria:** (Ej: "Antes de cualquier otro cambio, tu misión es encontrar y citar al menos una fuente académica o un dato estadístico que demuestre la relevancia real del problema que planteas.")
+[/PUNTO DE ENFOQUE PRINCIPAL]
+[EVALUACIÓN GENERAL:Coherencia, Claridad y Ortografía]
+-   **Coherencia y Claridad:** (Evalúa el flujo lógico y el lenguaje académico. Ej: "El texto presenta una buena base de ideas, pero [[rojo]]carece de conectores lógicos entre párrafos[[/rojo]], lo que dificulta seguir el hilo argumental.")
+-   **Ortografía y Gramática:** (Formato: - [[rojo]]Incorrecta[[/rojo]] -> Correcta. Si no hay errores, escribe: - No se encontraron errores.)
+[/EVALUACIÓN GENERAL]
+[ANÁLISIS DETALLADO:Análisis para ${appState.section}]
+(Sigue esta estructura rigurosa para CADA criterio de éxito de la sección.)
+-   **Criterio evaluado:** (Ej: Estructura Correcta del Objetivo)
+    -   **Cita de tu texto:** "..."
+    -   **Diagnóstico:** (Ej: "[[rojo]]Este objetivo carece del componente 'Finalidad'[[/rojo]]. Responde al 'qué', pero no al 'para qué'.")
+    -   **Pregunta guía:** (Ej: "Considerando tu problema, ¿cuál es el beneficio final de identificar esa infraestructura? ¿Es para 'evaluar la factibilidad', 'diseñar un plan' o 'estimar costos'?")
+(Repite esta estructura para todos los criterios relevantes)
+[/ANÁLISIS DETALLADO]
+[BANCO DE RECURSOS:Herramientas para la Tarea]
+(Proporciona herramientas específicas si detectas una debilidad recurrente. Sé práctico.)
+- **Para mejorar la Coherencia:** (Ej: "Utiliza conectores para enlazar tus ideas. Aquí tienes un banco: 'Además de lo anterior...', 'En consecuencia...', 'Por otro lado...', 'A pesar de esto...'")
+- **Para fortalecer tus Objetivos:** (Ej: "Usa verbos precisos y medibles. Evita verbos vagos como 'saber' o 'entender'. Opta por: **Analizar, Diseñar, Evaluar, Proponer, Comparar, Determinar, Identificar**.")
+[/BANCO DE RECURSOS]
+[PREGUNTAS DEL EVALUADOR:Prueba de Fuego]
+(Formula 1-2 preguntas desafiantes que un profesor haría para probar la solidez de tu trabajo.)
+- (Ej: "Mencionas que tu proyecto disminuirá los costos. Si un evaluador te pregunta: '¿Cuál es el indicador **cuantificable** que usarás para medir esa disminución y en qué plazo esperas ver resultados?', ¿qué responderías?")
+[/PREGUNTAS DEL EVALUADOR]
+[CIERRE:Siguientes Pasos]
+El trabajo académico es un proceso de refinamiento. Has recibido un análisis detallado y herramientas concretas. Tu tarea ahora es aplicar estas mejoras, comenzando por el **Punto de Enfoque Principal**. Espero la nueva versión.
+[/CIERRE]
+
+---
+**Texto del estudiante para analizar:**
+"${appState.inputText}"
+`;
+
+            try {
+                const feedback = await getAIFeedback(prompt, appState.uploadedImageBase64);
+                appState.feedback = feedback;
+                
+                appState.feedbackHistory.push({
+                    section: appState.section,
+                    inputText: appState.inputText,
+                    feedback: feedback,
+                    timestamp: Date.now()
+                });
+
+                showMessage("✅ Análisis completado. Revisa la retroalimentación.", 'success');
+            } catch (error) {
+                showMessage(`❌ ${error.message || 'Error de conexión. Verifica la red e intenta de nuevo.'}`, 'error');
+            } finally {
+                clearInterval(appState.loadingInterval);
+                appState.loading = false;
+                appState.currentAction = null;
+                render();
+            }
+        }
+        
+        async function handleGetGlobalCoherenceFeedback() {
+            const button = document.getElementById('coherence-button');
+            const feedbackPanel = document.getElementById('coherence-feedback-panel');
+            button.disabled = true;
+            button.innerHTML = 'Analizando...';
+            feedbackPanel.innerHTML = '<p class="text-center text-cyan-400">Generando análisis de alineación...</p>';
+
+            const problem = document.getElementById('coherence-problem').value;
+            const generalObj = document.getElementById('coherence-general-obj').value;
+            const specificObjs = document.getElementById('coherence-specific-objs').value;
+
+            // Save to appState to ensure consistency
+            appState.problemStatementText = problem;
+            appState.generalObjectiveText = generalObj;
+
+
+            const prompt = `
+Actúa como un estratega de proyectos de investigación. Tu única misión es analizar la coherencia y alineación entre los pilares de un proyecto. Sé extremadamente directo, claro y constructivo.
+
+**Instrucciones de Formato (OBLIGATORIO):**
+-   Usa **EXCLUSIVAMENTE** los siguientes bloques: [ANÁLISIS DE ALINEACIÓN VERTICAL:Problema vs. Objetivo General], [ANÁLISIS DE SUFICIENCIA DE PASOS:Objetivos Específicos vs. Objetivo General], [ANÁLISIS DE CONSISTENCIA TERMINOLÓGICA:Consistencia de Conceptos Clave], [DIAGNÓSTICO GENERAL Y RECOMENDACIÓN:Veredicto y Próximo Paso].
+-   Usa **negrita**, [[rojo]]debilidades o desconexiones[[/rojo]], y [[azul]]fortalezas o alineaciones correctas[[/azul]].
+-   **REGLA DE FORMATO CRÍTICA E INQUEBRANTABLE:** El formato DEBE SER EXACTAMENTE \`[[rojo]]texto[[/rojo]]\` y \`[[azul]]texto[[/azul]]\`.
+
+---
+**Pilares del Proyecto del Estudiante:**
+- **Problema (Pregunta de Investigación):** "${problem}"
+- **Objetivo General:** "${generalObj}"
+- **Objetivos Específicos:** "${specificObjs}"
+
+---
+**Plantilla de Análisis de Coherencia**
+
+[ANÁLISIS DE ALINEACIÓN VERTICAL:Problema vs. Objetivo General]
+- **Diagnóstico:** (Ej: "[[azul]]Alineación correcta.[[azul]] Tu objetivo general busca 'Identificar la infraestructura', lo cual es una respuesta directa a tu pregunta de '¿Cuál es la infraestructura necesaria?'.")
+[/ANÁLISIS DE ALINEACIÓN VERTICAL]
+
+[ANÁLISIS DE SUFICIENCIA DE PASOS:Objetivos Específicos vs. Objetivo General]
+- **Diagnóstico:** (Ej: "[[rojo]]Pasos insuficientes.[[rojo]] Tu objetivo general es 'Evaluar la factibilidad del cambio', pero tus objetivos específicos solo se centran en 'describir' y 'determinar'. Te falta un paso crucial relacionado con el análisis de costos.")
+[/ANÁLISIS DE SUFICIENCIA DE PASOS]
+
+[ANÁLISIS DE CONSISTENCIA TERMINOLÓGICA:Consistencia de Conceptos Clave]
+- **Diagnóstico:** (Ej: "[[rojo]]Inconsistencia terminológica.[[rojo]] En el problema hablas de 'sustituir el parque vehicular', pero en los objetivos usas 'mejorar la electromovilidad'. Debes unificar estos términos.")
+[/ANÁLISIS DE CONSISTENCIA TERMINOLÓGICA]
+
+[DIAGNÓSTICO GENERAL Y RECOMENDACIÓN:Veredicto y Próximo Paso]
+- **Veredicto:** (Ej: "Tu proyecto tiene una base sólida, pero la principal debilidad radica en la insuficiencia de los objetivos específicos.")
+- **Recomendación Clave:** (Ej: "Tu próximo paso es añadir un cuarto objetivo específico que se enfoque en el 'análisis de costos y retorno de inversión'.")
+[/DIAGNÓSTICO GENERAL Y RECOMENDACIÓN]
+`;
+            
+            try {
+                const feedback = await getAIFeedback(prompt);
+                feedbackPanel.innerHTML = parseFeedback(feedback);
+            } catch (error) {
+                feedbackPanel.innerHTML = `<p class="text-center text-red-400">Error al generar el análisis. Inténtalo de nuevo.</p>`;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Realizar Análisis de Alineación';
+            }
+        }
+
+        async function handleGetRelevanceFeedback() {
+            const button = document.getElementById('research-button');
+            const feedbackPanel = document.getElementById('research-feedback-panel');
+            button.disabled = true;
+            button.innerHTML = 'Analizando...';
+            feedbackPanel.innerHTML = '<p class="text-center text-cyan-400">Analizando relevancia...</p>';
+
+            const abstract = document.getElementById('research-abstract').value;
+            const problem = appState.problemStatementText;
+            const generalObj = appState.generalObjectiveText;
+
+            const prompt = `
+Actúa como un Asistente de Investigación experto. Tu misión es analizar el resumen (abstract) de una fuente y determinar su relevancia para el proyecto de un estudiante.
+
+**Contexto del Proyecto del Estudiante:**
+- **Problema:** "${problem}"
+- **Objetivo General:** "${generalObj}"
+
+**Resumen de la Fuente a Analizar:**
+"${abstract}"
+
+**Tu Tarea:**
+Genera una evaluación de relevancia usando el siguiente formato estricto:
+
+- **Nivel de Relevancia:** (Elige una: [[azul]]Alta Relevancia[[/azul]], [[rojo]]Baja Relevancia[[/rojo]], Relevancia Moderada)
+- **Justificación:** (Explica por qué. Ej: "Este artículo es crucial porque aborda directamente el 'análisis de costos', que es parte de tu objetivo.")
+- **Estrategia de Lectura Recomendada:** (Da un consejo para ahorrar tiempo. Ej: "Enfócate en la sección de 'Resultados' y la Tabla 2.")
+`;
+            try {
+                const feedback = await getAIFeedback(prompt);
+                feedbackPanel.innerHTML = parseFeedback(feedback);
+            } catch (error) {
+                feedbackPanel.innerHTML = `<p class="text-center text-red-400">Error al analizar. Inténtalo de nuevo.</p>`;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Analizar Relevancia';
+            }
+        }
+
+        async function handleGetDefenseQuestion() {
+            const button = document.getElementById('defense-question-button');
+            const questionPanel = document.getElementById('defense-question-panel');
+            button.disabled = true;
+            button.innerHTML = 'Generando...';
+            questionPanel.innerHTML = '<p class="text-center text-cyan-400">Generando pregunta...</p>';
+
+            const problem = appState.problemStatementText;
+            const generalObj = appState.generalObjectiveText;
+
+            const prompt = `
+Actúa como un evaluador de tesis exigente. Basado en el problema y objetivo del estudiante, formula UNA pregunta desafiante que harías en una defensa oral.
+
+**Contexto del Proyecto:**
+- **Problema:** "${problem}"
+- **Objetivo General:** "${generalObj}"
+
+**Tu Tarea:**
+Genera solo la pregunta. Sé directo y conciso.
+`;
+            try {
+                const question = await getAIFeedback(prompt);
+                appState.currentDefenseQuestion = question;
+                questionPanel.innerHTML = `<p class="font-semibold text-white">Pregunta del Evaluador:</p><p>${question}</p>`;
+            } catch (error) {
+                questionPanel.innerHTML = `<p class="text-center text-red-400">Error al generar pregunta.</p>`;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Generar Nueva Pregunta';
+            }
+        }
+
+        async function handleEvaluateDefenseAnswer() {
+            const button = document.getElementById('defense-answer-button');
+            const feedbackPanel = document.getElementById('defense-feedback-panel');
+            button.disabled = true;
+            button.innerHTML = 'Evaluando...';
+            feedbackPanel.innerHTML = '<p class="text-center text-cyan-400">Evaluando tu respuesta...</p>';
+
+            const answer = document.getElementById('defense-answer').value;
+
+            const prompt = `
+Actúa como un coach de defensa de tesis. El estudiante ha respondido a una pregunta del evaluador. Tu misión es darle feedback sobre la CALIDAD de su respuesta.
+
+**Pregunta del Evaluador:**
+"${appState.currentDefenseQuestion}"
+
+**Respuesta del Estudiante:**
+"${answer}"
+
+**Tu Tarea:**
+Evalúa la respuesta del estudiante en los siguientes puntos:
+- **Claridad y Concisión:** ¿Fue directo al punto o divagó?
+- **Seguridad:** ¿El lenguaje transmite confianza o duda?
+- **Contenido:** ¿Respondió realmente a lo que se le preguntó?
+
+Usa el formato de [[azul]]fortalezas[[/azul]] y [[rojo]]debilidades[[/rojo]].
+`;
+            try {
+                const feedback = await getAIFeedback(prompt);
+                feedbackPanel.innerHTML = parseFeedback(feedback);
+            } catch (error) {
+                feedbackPanel.innerHTML = `<p class="text-center text-red-400">Error al evaluar.</p>`;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Evaluar mi Respuesta';
+            }
+        }
+
+        async function handleDownloadFeedback() {
+            if (!appState.feedback) {
+                showMessage("No hay retroalimentación para descargar.", 'info');
+                return;
+            }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                doc.setFontSize(16);
+                doc.text(`Retroalimentación - ${appState.section}`, 20, 20);
+                
+                doc.setFontSize(10);
+                doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 20, 30);
+                
+                doc.setFontSize(12);
+                const text = appState.feedback
+                    .replace(/<[^>]*>/g, '') 
+                    .replace(/\[(SALUDO|PUNTO DE ENFOQUE PRINCIPAL|EVALUACIÓN GENERAL|ANÁLISIS DETALLADO|BANCO DE RECURSOS|PREGUNTAS DEL EVALUADOR|CIERRE):?(.*?)\]/g, '\n--- $2 ---\n')
+                    .replace(/\[\/(SALUDO|PUNTO DE ENFOQUE PRINCIPAL|EVALUACIÓN GENERAL|ANÁLISIS DETALLADO|BANCO DE RECURSOS|PREGUNTAS DEL EVALUADOR|CIERRE)\]/g, '')
+                    .replace(/\[\[[^\]]*\]\]/g, '');
+                
+                const splitText = doc.splitTextToSize(text, 170);
+                doc.text(splitText, 20, 45);
+                
+                doc.save(`retroalimentacion_${appState.section.replace(/\s+/g, '_')}.pdf`);
+                showMessage("Descarga del PDF completada.", 'success');
+            } catch (error) {
+                showMessage("Error al generar el PDF. Intenta nuevamente.", 'error');
+            }
+        }
+
+        function handleNewSession() {
+            appState.inputText = '';
+            appState.generalObjectiveText = '';
+            appState.problemStatementText = '';
+            appState.section = 'Introducción';
+            appState.feedback = null;
+            appState.isBuilderActive = false;
+            appState.builderAnswers = {};
+            appState.specificObjectives = [{ verb: '', object: '', purpose: '' }];
+            showMessage('🔄 Sesión reiniciada.', 'info');
+            render();
+        }
+
+        function updateCharCounter(textareaId, counterId, limit) {
+            const textarea = document.getElementById(textareaId);
+            const counter = document.getElementById(counterId);
+            if (textarea && counter) {
+                const remaining = limit - textarea.value.length;
+                const counterColor = remaining < 100 ? 'text-red-400' : 'text-gray-500';
+                counter.className = `absolute bottom-3 right-3 text-xs font-mono ${counterColor}`;
+                counter.textContent = `${remaining}/${limit}`;
+            }
+        }
+
+        function renderWithFocus() {
+            const activeElement = document.activeElement;
+            const activeElementId = activeElement ? activeElement.id : null;
+            const selectionStart = activeElement ? activeElement.selectionStart : null;
+            const selectionEnd = activeElement ? activeElement.selectionEnd : null;
+
+            render();
+
+            if (activeElementId) {
+                const newActiveElement = document.getElementById(activeElementId);
+                if (newActiveElement) {
+                    newActiveElement.focus();
+                    if (typeof newActiveElement.setSelectionRange === 'function') {
+                        newActiveElement.setSelectionRange(selectionStart, selectionEnd);
+                    }
+                }
+            }
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            const mainContentArea = `
+                <div class="relative w-full">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-gray-400 font-medium text-sm">
+                            Borrador de tu ${appState.section}
+                        </label>
+                        ${(appState.inputText !== '' && guidedBuilderQuestions[appState.section]) ? `
+                            <button onclick="handleStartOver()" class="text-xs text-gray-500 hover:text-cyan-400 flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 4l16 16"/></svg>
+                                Empezar de Nuevo
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div id="writing-area"></div>
+                </div>
+            `;
+            app.innerHTML = `
+                <div class="min-h-screen bg-gray-950 font-sans text-gray-200 p-4 flex flex-col items-center">
+                    <div class="w-full max-w-3xl flex-grow">
+                        <h1 class="text-4xl md:text-5xl font-extrabold text-center mb-1">
+                            <span class="text-white">Lumen</span>
+                            <span class="bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-red-500 text-transparent bg-clip-text">Advisor</span>
+                        </h1>
+                        <p class="text-base text-center text-gray-400 mb-6 max-w-xl mx-auto">
+                            Tu asesor personal para el proyecto de título.
+                        </p>
+
+                        <div class="w-full flex flex-col space-y-6">
+                            <div class="bg-gray-950/50 p-6 rounded-xl border border-gray-800 shadow-lg">
+                                <h2 class="text-lg text-center font-semibold text-gray-300 mb-4">
+                                    <span class="italic font-normal text-gray-400">Ahora estás trabajando en la sección de</span> <span class="font-bold text-cyan-400">${appState.section}</span>
+                                </h2>
+
+                                <div class="mb-2">
+                                    <div class="flex flex-wrap justify-between items-center mb-1 gap-2">
+                                        <label class="block text-gray-400 font-medium text-sm">
+                                            Selecciona una sección
+                                        </label>
+                                        <div class="flex gap-2 flex-wrap">
+                                            <button onclick="toggleGuideModal(true)" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1">Guía</button>
+                                            <button onclick="toggleCoherenceModal(true)" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1">Coherencia</button>
+                                            <button onclick="toggleResearchModal(true)" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1">Investigación</button>
+                                            <button onclick="toggleDefenseModal(true)" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1">Defensa</button>
+                                        </div>
+                                    </div>
+                                    <select id="section-select" class="w-full px-3 py-2 bg-gray-950 border border-gray-800 text-gray-300 rounded-lg text-sm">
+                                        ${sections.map(sec => `<option value="${sec}" ${sec === appState.section ? 'selected' : ''}>${sec}</option>`).join('')}
+                                    </select>
+                                </div>
+                                
+                                <div id="section-description" class="text-xs p-3 my-2 bg-gray-950/50 border border-cyan-500/20 rounded-md text-cyan-300">
+                                    ${sectionDescriptions[appState.section]}
+                                </div>
+                                
+                                <div id="section-specific-helper-text" class="text-xs ${appState.sectionSpecificHelperText ? '' : 'hidden'}">
+                                    <div class="p-3 my-2 bg-gray-950/50 border border-fuchsia-500/20 rounded-md text-fuchsia-300">
+                                        ${appState.sectionSpecificHelperText}
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                     ${appState.section === 'Desarrollo' ? `
+                                    <div class="relative w-full">
+                                        <label class="block text-gray-400 font-medium mb-1 text-sm">Adjuntar Gráfico/Imagen (Opcional)</label>
+                                        <input type="file" id="image-upload" accept="image/*" class="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cyan-900/50 file:text-cyan-300 hover:file:bg-cyan-900">
+                                        <div id="image-preview" class="mt-2"></div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    <div id="context-area-problem" class="relative w-full ${appState.section === 'Objetivo General' || appState.section === 'Objetivos Específicos' ? '' : 'hidden'}">
+                                        <label class="block text-gray-400 font-medium mb-1 text-sm">Contexto: Planteamiento del Problema</label>
+                                        <textarea id="problem-statement-text" class="w-full h-24 p-3 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-sm" placeholder="Pega aquí tu Planteamiento del Problema..." maxlength="${charLimits.problemContext}">${appState.problemStatementText}</textarea>
+                                        <div id="problem-counter" class="absolute bottom-3 right-3 text-xs font-mono"></div>
+                                    </div>
+                                    
+                                    <div id="context-area-general-obj" class="relative w-full ${appState.section === 'Objetivos Específicos' ? '' : 'hidden'}">
+                                        <label class="block text-gray-400 font-medium mb-1 text-sm">Contexto: Objetivo General</label>
+                                        <textarea id="general-objective-text" class="w-full h-20 p-3 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-sm" placeholder="Pega aquí tu Objetivo General..." maxlength="${charLimits.generalObjectiveContext}">${appState.generalObjectiveText}</textarea>
+                                        <div id="general-obj-counter" class="absolute bottom-3 right-3 text-xs font-mono"></div>
+                                    </div>
+
+                                    ${mainContentArea}
+                                </div>
+
+                                <div id="message-box" class="mt-3 p-3 rounded-lg border text-xs text-center font-medium bg-gray-950/50 border-gray-800 relative overflow-hidden">
+                                    <!-- Message content here -->
+                                </div>
+                            </div>
+                            <div class="mt-4 w-full flex flex-wrap justify-center items-center gap-2">
+                                <button onclick="handleNewSession()" class="w-full sm:w-auto py-2 px-6 text-sm font-bold text-gray-300 bg-gray-950 border-2 border-gray-800 rounded-full">Limpiar</button>
+                                <button onclick="handleDownloadFeedback()" class="w-full sm:w-auto py-2 px-6 text-sm font-bold text-cyan-300 bg-transparent border-2 border-cyan-500 rounded-full">Descargar</button>
+                                <button onclick="handleGetSectionFeedback()" ${appState.loading ? 'disabled' : ''} class="w-full sm:w-auto flex-shrink-0 py-1.5 px-6 flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 rounded-full">
+                                    <svg class="w-5 h-5 pulsing-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" stroke="#a5f3fc" stroke-width="1.5" fill="none"/><circle cx="12" cy="12" r="4" class="text-cyan-400"/></svg>
+                                    <span>${appState.loading ? 'Analizando...' : 'Obtener Asesoría'}</span>
+                                </button>
+                            </div>
+
+                            <div id="feedback-panel" class="bg-gray-950/30 p-4 rounded-xl border border-gray-800">
+                                <h2 class="text-lg font-bold text-gray-300 mb-4">Retroalimentación del Asesor</h2>
+                                <div class="space-y-2 text-sm feedback-content">
+                                    ${appState.feedback ? parseFeedback(appState.feedback) : `<div class="text-center py-10"><h3 class="mt-2 text-sm font-medium text-gray-400">Esperando tu borrador</h3></div>`}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="w-full max-w-3xl mt-12 pt-6 border-t border-gray-800 text-center text-xs text-gray-600 space-y-3">
+                        <p class="font-semibold text-gray-500">Desarrollado por Jose Peña</p>
+                        <div class="text-gray-700">
+                            <button onclick="showLegalInfo('terms')" class="hover:text-cyan-400">Términos de Servicio</button> | <button onclick="showLegalInfo('policy')" class="hover:text-cyan-400">Política de Privacidad</button>
+                            <p class="mt-1">&copy; ${new Date().getFullYear()} Lumen Advisor. Todos los derechos reservados.</p>
+                        </div>
+                        <div>
+                            <button onclick="showLegalInfo('ai')" class="italic hover:text-cyan-400">Sobre la Inteligencia Artificial</button>
+                        </div>
+                    </footer>
+                </div>
+            `;
+            
+            const writingArea = document.getElementById('writing-area');
+            if (appState.isBuilderActive) {
+                let builderHtml = '';
+                const areInputsValid = validateBuilderState();
+                if (appState.section === 'Objetivo General') {
+                    builderHtml = `<div class="space-y-4 p-4 border border-dashed border-cyan-500/30 rounded-lg">
+                        <div class="p-3 bg-gray-950 rounded-md text-xs"><strong class="text-cyan-400">Contexto (Tu Problema):</strong><p class="mt-1 text-gray-400">${appState.problemStatementText}</p></div>`;
+                    guidedBuilderQuestions['Objetivo General'].forEach(q => {
+                        builderHtml += `<div>
+                            <label class="block text-gray-400 font-medium mb-1 text-sm">${q.question}</label>
+                            <textarea id="builder-q-${q.id}" class="w-full h-20 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs">${appState.builderAnswers[q.id] || ''}</textarea>
+                        </div>`;
+                    });
+                } else if (appState.section === 'Objetivos Específicos') {
+                    builderHtml = `<div class="space-y-4 p-4 border border-dashed border-cyan-500/30 rounded-lg">
+                        <div class="p-3 bg-gray-950 rounded-md text-xs"><strong class="text-cyan-400">Contexto (Tu Objetivo General):</strong><p class="mt-1 text-gray-400">${appState.generalObjectiveText}</p></div>`;
+                    appState.specificObjectives.forEach((obj, index) => {
+                         builderHtml += `<div class="p-3 border-t border-gray-800 mt-2"><strong class="text-fuchsia-400">Objetivo Específico ${index + 1}</strong>`;
+                         guidedBuilderQuestions['Objetivos Específicos'].forEach(q => {
+                             builderHtml += `<div class="mt-2">
+                                <label class="block text-gray-400 font-medium mb-1 text-sm">${q.question}</label>
+                                <textarea id="builder-q-${index}-${q.id}" class="w-full h-20 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs">${obj[q.id] || ''}</textarea>
+                            </div>`;
+                         });
+                         builderHtml += '</div>';
+                    });
+                    if (appState.specificObjectives.length < 4) {
+                        builderHtml += `<button onclick="addSpecificObjective()" class="w-full mt-2 py-2 text-xs text-cyan-400 hover:bg-gray-800 rounded-md">+ Agregar otro Objetivo Específico</button>`;
+                    }
+                } else {
+                    const questions = guidedBuilderQuestions[appState.section] || [];
+                    builderHtml = '<div class="space-y-4 p-4 border border-dashed border-cyan-500/30 rounded-lg">';
+                    questions.forEach(q => {
+                        builderHtml += `<div>
+                            <label class="block text-gray-400 font-medium mb-1 text-sm">${q.question}</label>
+                            <textarea id="builder-q-${q.id}" class="w-full h-20 p-2 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-xs">${appState.builderAnswers[q.id] || ''}</textarea>
+                        </div>`;
+                    });
+                }
+                
+                builderHtml += `<button id="generate-draft-button" onclick="handleGenerateDraft()" class="w-full mt-4 py-2 px-4 text-sm font-bold text-white rounded-full ${areInputsValid ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-gray-600 cursor-not-allowed'}" ${!areInputsValid ? 'disabled' : ''}>Generar Borrador</button>`;
+                if (!areInputsValid) {
+                    builderHtml += `<p class="text-xs text-center text-gray-500 mt-2">Por favor, completa todos los campos con respuestas detalladas (mín. 15 caracteres) para generar un borrador de alta calidad.</p>`;
+                }
+                 builderHtml += `</div>`;
+                writingArea.innerHTML = builderHtml;
+            } else {
+                 let guidanceHtml = '';
+                const baseClass = "text-center p-8 border border-dashed border-gray-700 rounded-lg";
+                const disabledButton = (text) => `<button class="w-full py-2 px-6 text-sm font-bold text-white bg-gray-600 rounded-full cursor-not-allowed" disabled>${text}</button>`;
+                const disabledTextarea = `<textarea id="input-text" class="w-full h-60 p-3 bg-gray-800 text-gray-500 border border-gray-700 rounded-lg text-sm" placeholder="Escribe aquí tu borrador..." disabled></textarea>`;
+                
+                let contextMissing = false;
+                if (appState.section === 'Objetivo General' && !appState.problemStatementText) {
+                    guidanceHtml = `<div class="${baseClass}">
+                        <h4 class="font-semibold text-white mb-2">⚠️ Para construir un buen Objetivo General, primero necesitas un Problema.</h4>
+                        <p class="text-xs text-gray-400 mb-4">Por favor, define tu "Planteamiento del Problema" en el campo de contexto de arriba, o ve a su sección correspondiente.</p>
+                        ${disabledButton('✨ Usar Constructor Guiado')} <div class="my-4 text-gray-600 text-xs">O</div> ${disabledTextarea}
+                    </div>`;
+                    contextMissing = true;
+                } else if (appState.section === 'Objetivos Específicos' && !appState.generalObjectiveText) {
+                    guidanceHtml = `<div class="${baseClass}">
+                        <h4 class="font-semibold text-white mb-2">⚠️ Para construir los Objetivos Específicos, primero necesitas un Objetivo General.</h4>
+                        <p class="text-xs text-gray-400 mb-4">Por favor, define tu "Objetivo General" en el campo de contexto de arriba, o ve a su sección correspondiente.</p>
+                        ${disabledButton('✨ Usar Constructor Guiado')} <div class="my-4 text-gray-600 text-xs">O</div> ${disabledTextarea}
+                    </div>`;
+                    contextMissing = true;
+                }
+                
+                if (!contextMissing) {
+                     if (appState.inputText === '' && guidedBuilderQuestions[appState.section]) {
+                         guidanceHtml = `
+                            <div class="${baseClass}">
+                                 <h4 class="font-semibold text-white mb-2">¿No sabes cómo empezar?</h4>
+                                 <p class="text-xs text-gray-400 mb-4">Usa el constructor guiado para que la IA te ayude a crear un primer borrador.</p>
+                                 <button onclick="startGuidedBuilder()" class="w-full py-2 px-6 text-sm font-bold text-white bg-gradient-to-r from-cyan-500 to-fuchsia-600 rounded-full">✨ Usar Constructor Guiado</button>
+                                 <div class="my-4 text-gray-600 text-xs">O</div>
+                                  <textarea id="input-text" class="w-full h-60 p-3 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-sm" placeholder="Escribe aquí tu borrador..."></textarea>
+                            </div>`;
+                    } else {
+                        guidanceHtml = `<textarea id="input-text" class="w-full h-60 p-3 bg-gray-950 text-gray-300 border border-gray-800 rounded-lg text-sm" placeholder="Escribe aquí el contenido de tu sección...">${appState.inputText}</textarea>`;
+                    }
+                }
+                 writingArea.innerHTML = guidanceHtml;
+            }
+
+            const messageBox = document.getElementById('message-box');
+             if (appState.loading) {
+                messageBox.innerHTML = `
+                    <div class="flex items-center justify-center h-auto min-h-[2.5rem] relative overflow-hidden">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="w-12 h-12 rounded-full bg-cyan-500/20 quantum-core"></div>
+                        </div>
+                        <div class="absolute top-0 left-1/2 w-1/2 h-full overflow-hidden">
+                            <div class="w-full h-full bg-gradient-to-l from-cyan-400/0 to-cyan-400/40 scanner-beam-left"></div>
+                        </div>
+                        <div class="absolute top-0 right-1/2 w-1/2 h-full overflow-hidden">
+                            <div class="w-full h-full bg-gradient-to-r from-cyan-400/0 to-cyan-400/40 scanner-beam-right"></div>
+                        </div>
+                        <div id="loading-text" class="z-10 text-xs sm:text-sm text-center font-medium text-cyan-200 tracking-wider uppercase px-2">${appState.loadingMessage}</div>
+                    </div>`;
+            } else {
+                messageBox.innerHTML = (appState.message ? `<span class="${appState.messageType === 'success' ? 'text-teal-400' : 'text-gray-300'}">${appState.message}</span>` : `<span class="text-gray-300">🤖 Lumen Advisor está listo para guiarte.</span>`);
+            }
+
+            addEventListeners();
+        }
+
+        function validateBuilderState() {
+            const minLength = 15;
+            const questions = guidedBuilderQuestions[appState.section];
+            if (!questions) return false;
+
+            if (appState.section === 'Objetivos Específicos') {
+                return appState.specificObjectives.every(obj => 
+                    obj.verb && obj.verb.trim().length >= minLength &&
+                    obj.object && obj.object.trim().length >= minLength &&
+                    obj.purpose && obj.purpose.trim().length >= minLength
+                );
+            } else {
+                return questions.every(q => 
+                    appState.builderAnswers[q.id] && appState.builderAnswers[q.id].trim().length >= minLength
+                );
+            }
+        }
+        
+        function addEventListeners() {
+            const sectionSelect = document.getElementById('section-select');
+            const inputText = document.getElementById('input-text');
+            const imageUpload = document.getElementById('image-upload');
+            const problemStatementText = document.getElementById('problem-statement-text');
+            const generalObjectiveText = document.getElementById('general-objective-text');
+            const coherenceProblem = document.getElementById('coherence-problem');
+            const coherenceGeneralObj = document.getElementById('coherence-general-obj');
+
+            if (sectionSelect) {
+                sectionSelect.onchange = (e) => {
+                    appState.section = e.target.value;
+                     if (appState.section === 'Objetivo General') {
+                        appState.sectionSpecificHelperText = '💡 <strong>Un solo Objetivo General:</strong> Tu proyecto debe tener un único norte. Un solo objetivo general garantiza que toda tu investigación esté enfocada en resolver un problema central y no se disperse.';
+                    } else if (appState.section === 'Objetivos Específicos') {
+                        appState.sectionSpecificHelperText = '💡 <strong>De 3 a 4 Objetivos Específicos:</strong> Este rango es ideal. Menos de 3 puede indicar que no has desglosado suficientemente el problema. Más de 4 puede hacer que tu proyecto sea demasiado extenso e inabarcable. Son los pasos lógicos para alcanzar tu meta principal.';
+                    } else {
+                        appState.sectionSpecificHelperText = '';
+                    }
+                    appState.isBuilderActive = false;
+                    appState.inputText = '';
+                    render(); 
+                };
+            }
+            
+            if (inputText) {
+                inputText.oninput = (e) => {
+                    appState.inputText = e.target.value;
+                };
+            }
+            
+            if (problemStatementText) {
+                problemStatementText.oninput = (e) => {
+                    appState.problemStatementText = e.target.value;
+                    renderWithFocus();
+                };
+            }
+            
+            if (generalObjectiveText) {
+                generalObjectiveText.oninput = (e) => {
+                    appState.generalObjectiveText = e.target.value;
+                    renderWithFocus();
+                };
+            }
+
+            if(coherenceProblem) {
+                coherenceProblem.onchange = (e) => appState.problemStatementText = e.target.value;
+            }
+            if(coherenceGeneralObj) {
+                coherenceGeneralObj.onchange = (e) => appState.generalObjectiveText = e.target.value;
+            }
+
+            if (imageUpload) {
+                imageUpload.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            appState.uploadedImageBase64 = reader.result.split(',')[1];
+                            const preview = document.getElementById('image-preview');
+                            preview.innerHTML = `<img src="${reader.result}" class="max-w-xs max-h-40 rounded-lg mt-2 mx-auto" alt="Vista previa de la imagen">`;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+            }
+
+            if (appState.isBuilderActive) {
+                if (appState.section === 'Objetivos Específicos') {
+                     appState.specificObjectives.forEach((obj, index) => {
+                         guidedBuilderQuestions['Objetivos Específicos'].forEach(q => {
+                            const textarea = document.getElementById(`builder-q-${index}-${q.id}`);
+                            if(textarea) {
+                                textarea.oninput = (e) => {
+                                    appState.specificObjectives[index][q.id] = e.target.value;
+                                    renderWithFocus();
+                                }
+                            }
+                         });
+                     });
+                } else {
+                    const questions = guidedBuilderQuestions[appState.section] || [];
+                    questions.forEach(q => {
+                        const textarea = document.getElementById(`builder-q-${q.id}`);
+                        if(textarea) {
+                            textarea.oninput = (e) => {
+                                appState.builderAnswers[q.id] = e.target.value;
+                                renderWithFocus();
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            render();
+        });
+    </script>
+</body>
+</html>
+
